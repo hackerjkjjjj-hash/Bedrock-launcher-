@@ -1,0 +1,55 @@
+name: Build Flutter APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+
+      # បង្កើត Android Platform ថ្មីស្វ័យប្រវត្តិដោយប្រើ Gradle ជំនាន់ចុងក្រោយ
+      - name: Initialize Android Platform
+        run: flutter create . --org com.jerry.bedrocklauncher --project-name mc_bedrock_launcher
+
+      # Android 11+ លាក់ព័ត៌មាន App ដទៃទៀតដោយស្វ័យប្រវត្តិ (package visibility)។
+      # បើគ្មាន <queries> នេះទេ Intent និង minecraft:// URI នឹងរកមិនឃើញ Minecraft PE ទេ
+      # ទោះបីវាបានដំឡើងក្តី ព្រោះ AndroidManifest.xml ត្រូវបានបង្កើតឡើងវិញរាល់ពេល Build
+      - name: Add package visibility for Minecraft PE
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's#</manifest>#    <queries>\n        <package android:name="com.mojang.minecraftpe" />\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="minecraft" />\n        </intent>\n    </queries>\n</manifest>#' "$MANIFEST"
+          cat "$MANIFEST"
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MC-Bedrock-Launcher-v1.26.33
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
